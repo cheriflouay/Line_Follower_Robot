@@ -1,0 +1,342 @@
+# Line Follower Robot - ROS 2 Humble
+
+A complete line follower robot simulation using ROS 2 Humble, Gazebo, and classic computer vision (OpenCV). The robot autonomously follows a black line on a white surface using a downward-facing camera and PD controller.
+
+## Features
+
+- **Differential drive robot** with realistic physics
+- **Camera-based line detection** using OpenCV (no ML/AI)
+- **PD Controller** for smooth line following
+- **Gazebo simulation** with oval racing track
+- **RViz visualization** with camera feed and robot model
+- **Pure Python implementation** using rclpy
+
+## Demo
+
+The robot uses a downward-facing camera to detect a black line and follows it autonomously around an oval track using classic computer vision and control algorithms.
+
+## Requirements
+
+- Ubuntu 22.04
+- ROS 2 Humble
+- Gazebo (gazebo_ros_pkgs)
+- Python 3.10+
+- OpenCV
+
+## Installation
+
+### 1. Install Dependencies
+
+```bash
+sudo apt update
+sudo apt install -y \
+    ros-humble-gazebo-ros-pkgs \
+    ros-humble-xacro \
+    ros-humble-robot-state-publisher \
+    ros-humble-rviz2 \
+    python3-opencv
+
+pip3 install opencv-python
+```
+
+### 2. Create Workspace (if you don't have one)
+
+```bash
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+```
+
+### 3. Clone or Create the Package
+
+Copy the entire `line_follower_robot` package into your `src` directory.
+
+### 4. Package Structure
+
+```
+line_follower_robot/
+├── package.xml
+├── setup.py
+├── setup.cfg
+├── resource/
+│   └── line_follower_robot          # Empty marker file
+├── line_follower_robot/
+│   └── __init__.py                  # Empty Python package init
+├── scripts/
+│   └── line_follower_node.py        # Main line follower logic
+├── launch/
+│   └── line_follower.launch.py      # Launch file
+├── urdf/
+│   └── line_follower_robot.xacro    # Robot description
+├── worlds/
+│   └── line_world.world             # Gazebo world with track
+└── config/
+    └── rviz_config.rviz             # RViz configuration
+```
+
+### 5. Build the Package
+
+```bash
+cd ~/ros2_ws
+colcon build --packages-select line_follower_robot
+source install/setup.bash
+```
+
+## Usage
+
+### Launch with Gazebo and RViz
+
+```bash
+ros2 launch line_follower_robot line_follower.launch.py
+```
+
+### Launch without RViz
+
+```bash
+ros2 launch line_follower_robot line_follower.launch.py use_rviz:=false
+```
+
+### Launch with Custom Parameters
+
+```bash
+ros2 launch line_follower_robot line_follower.launch.py use_rviz:=true
+```
+
+## How It Works
+
+### 1. **Robot Model**
+- Differential drive base with two powered wheels
+- Front caster wheel for stability
+- Downward-facing camera (line sensor)
+- URDF/XACRO description with Gazebo plugins
+
+### 2. **Vision System**
+The camera captures images at 30 Hz and processes them:
+1. Extract Region of Interest (bottom 40% of image)
+2. Convert to grayscale
+3. Apply Gaussian blur to reduce noise
+4. Binary threshold to isolate black line
+5. Find contours and calculate centroid
+6. Compute error (deviation from image center)
+
+### 3. **Control System**
+PD (Proportional-Derivative) Controller:
+```
+angular_velocity = -Kp × error - Kd × (error - last_error)
+```
+- **Proportional (Kp)**: Reacts to current error
+- **Derivative (Kd)**: Dampens oscillations
+
+### 4. **World**
+Gazebo world featuring:
+- White ground plane
+- Black line forming an oval track
+- Proper lighting for camera visibility
+- Realistic physics simulation
+
+## ROS 2 Topics
+
+### Subscribed Topics
+- `/line_camera/image_raw` (sensor_msgs/Image) - Camera feed
+
+### Published Topics
+- `/cmd_vel` (geometry_msgs/Twist) - Velocity commands
+- `/odom` (nav_msgs/Odometry) - Odometry data
+- `/robot_description` (std_msgs/String) - Robot URDF
+
+## Parameters
+
+You can tune these parameters in the launch file or at runtime:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `linear_speed` | 0.25 | Forward speed (m/s) |
+| `kp` | 0.006 | Proportional gain |
+| `kd` | 0.002 | Derivative gain |
+
+### Tuning Guide
+
+**For faster tracking:**
+- Increase `linear_speed` (but not too much or it will lose the line)
+
+**For sharper turns:**
+- Increase `kp` (may cause oscillations)
+
+**For smoother motion:**
+- Increase `kd` (dampens oscillations)
+- Decrease `kp`
+
+**If robot oscillates:**
+- Decrease `kp`
+- Increase `kd`
+
+**If robot is too slow to react:**
+- Increase `kp`
+- Decrease `kd`
+
+## Modifying the Track
+
+Edit `worlds/line_world.world` to change the track layout:
+
+```xml
+<model name="line_segment_name">
+  <static>true</static>
+  <pose>X Y Z Roll Pitch Yaw</pose>
+  <link name="link">
+    <visual name="visual">
+      <geometry>
+        <box>
+          <size>length width height</size>
+        </box>
+      </geometry>
+      ...
+    </visual>
+  </link>
+</model>
+```
+
+Keep line width at 0.08m for best results.
+
+## Troubleshooting
+
+### Robot doesn't move
+- Check if Gazebo is paused (press spacebar in Gazebo)
+- Verify the line follower node is running: `ros2 node list`
+- Check camera topic: `ros2 topic echo /line_camera/image_raw`
+
+### Robot loses the line
+- Reduce `linear_speed`
+- Increase `kp` for sharper corrections
+- Make sure track has good contrast (black on white)
+
+### Robot oscillates too much
+- Decrease `kp`
+- Increase `kd`
+- Reduce `linear_speed`
+
+### Camera shows blank/white image
+- Robot may not be positioned over the line
+- Check Gazebo lighting settings
+- Verify camera is facing downward
+
+### Build errors
+```bash
+# Clean and rebuild
+cd ~/ros2_ws
+rm -rf build/ install/ log/
+colcon build --packages-select line_follower_robot
+source install/setup.bash
+```
+
+### "Package not found" error
+```bash
+# Make sure you source the workspace
+source ~/ros2_ws/install/setup.bash
+
+# Add to .bashrc for persistence
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+```
+
+## Useful Commands
+
+### Monitor Topics
+```bash
+# List all topics
+ros2 topic list
+
+# View camera feed info
+ros2 topic info /line_camera/image_raw
+
+# Monitor velocity commands
+ros2 topic echo /cmd_vel
+
+# View node information
+ros2 node info /line_follower_node
+```
+
+### Visualize Camera
+```bash
+# Install if needed
+sudo apt install ros-humble-rqt-image-view
+
+# View camera feed
+ros2 run rqt_image_view rqt_image_view
+```
+
+### Control Robot Manually
+```bash
+# Stop the line follower node first, then:
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+```
+
+### Recording and Playback
+```bash
+# Record topics
+ros2 bag record -o my_bag /line_camera/image_raw /cmd_vel /odom
+
+# Playback
+ros2 bag play my_bag
+```
+
+## Code Structure
+
+### `line_follower_node.py`
+Main Python node that:
+- Subscribes to camera images
+- Processes images with OpenCV
+- Implements PD controller
+- Publishes velocity commands
+
+Key functions:
+- `image_callback()`: Processes camera images
+- `main()`: Node initialization and execution
+
+### `line_follower.launch.py`
+Launch file that starts:
+- Gazebo simulator with custom world
+- Robot state publisher
+- Robot spawner
+- Line follower node
+- RViz (optional)
+
+## Extending the Project
+
+### Add a lidar sensor
+Edit `line_follower_robot.xacro` and add:
+```xml
+<gazebo reference="base_link">
+  <sensor name="lidar" type="ray">
+    <!-- Lidar configuration -->
+  </sensor>
+</gazebo>
+```
+
+### Add obstacle detection
+Modify `line_follower_node.py` to subscribe to lidar data and implement obstacle avoidance.
+
+### Add speed control
+Implement adaptive speed based on line curvature detection.
+
+### Multiple robots
+Modify the launch file to spawn multiple robots with different namespaces.
+
+## License
+
+Apache-2.0
+
+## Contributing
+
+Feel free to submit issues and pull requests!
+
+## Author
+
+Created for ROS 2 Humble line following demonstration.
+
+## References
+
+- [ROS 2 Documentation](https://docs.ros.org/en/humble/)
+- [Gazebo Documentation](https://gazebosim.org/)
+- [OpenCV Python Tutorials](https://docs.opencv.org/4.x/d6/d00/tutorial_py_root.html)
+
+---
+
+**Happy Line Following! 🤖🏁**
